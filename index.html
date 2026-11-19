@@ -1,138 +1,180 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RizzGPT</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#0a0a14;color:#f1f5f9;font-family:system-ui,sans-serif;min-height:100vh}
-    input,textarea{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:14px;width:100%;outline:none}
-    button{cursor:pointer;border:none;border-radius:8px;font-weight:700;transition:all .2s}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WING AI</title>
+<style>
+  :root{--bg:#09090b;--card:#131316;--line:#26262c;--text:#ececf1;--mute:#8b8b96;--gold:#c9a45c;--gold2:#e8cf94}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;min-height:100vh;padding:20px 16px 60px}
+  .wrap{max-width:640px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+  h1{font-size:22px;letter-spacing:6px;font-weight:700;background:linear-gradient(90deg,var(--gold),var(--gold2));-webkit-background-clip:text;color:transparent}
+  h1 small{display:block;font-size:10px;letter-spacing:3px;color:var(--mute);-webkit-text-fill-color:var(--mute);font-weight:400;margin-top:2px}
+  .icon-btn{background:none;border:1px solid var(--line);color:var(--mute);border-radius:10px;padding:8px 12px;cursor:pointer;font-size:13px}
+  .icon-btn:hover{color:var(--gold);border-color:var(--gold)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+  label{display:block;font-size:12px;color:var(--mute);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase}
+  textarea,input,select{width:100%;background:#0c0c0f;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:11px 12px;font-size:15px;font-family:inherit;outline:none}
+  textarea{min-height:110px;resize:vertical}
+  textarea:focus,input:focus,select:focus{border-color:var(--gold)}
+  .row{display:flex;gap:10px}.row>div{flex:1}
+  .mt{margin-top:12px}
+  .go{width:100%;margin-top:14px;padding:14px;border:none;border-radius:12px;background:linear-gradient(90deg,var(--gold),var(--gold2));color:#111;font-weight:700;font-size:15px;letter-spacing:2px;cursor:pointer}
+  .go:disabled{opacity:.5;cursor:wait}
+  .shot{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:13px;color:var(--mute)}
+  .shot img{height:48px;border-radius:8px;border:1px solid var(--line)}
+  .shot button{background:none;border:none;color:var(--gold);cursor:pointer;font-size:13px}
+  .msg{border-left:3px solid var(--gold);padding:2px 0 2px 12px;margin-bottom:14px}
+  .msg.best{background:rgba(201,164,92,.07);border-radius:0 10px 10px 0;padding:10px 12px}
+  .msg .tag{font-size:11px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center}
+  .msg p{font-size:16px;line-height:1.45}
+  .copy{background:none;border:1px solid var(--line);color:var(--mute);border-radius:8px;padding:3px 9px;font-size:11px;cursor:pointer}
+  .copy:hover{color:var(--gold);border-color:var(--gold)}
+  .reco{font-size:13px;color:var(--mute);margin-top:4px;line-height:1.4}
+  .err{color:#ff7a7a;font-size:14px;margin-top:10px}
+  .hint{font-size:12px;color:var(--mute);margin-top:6px;line-height:1.4}
+  .hist{font-size:13px;color:var(--mute);padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .hist:hover{color:var(--text)}
+  .hidden{display:none}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid #111;border-top-color:transparent;border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-right:8px}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const {useState} = React;
+<div class="wrap">
+  <header>
+    <h1>WING AI<small>TON WINGMAN IA</small></h1>
+    <button class="icon-btn" id="setBtn">⚙ Clé Groq</button>
+  </header>
 
-const SCENARIOS = [
-  "Matcher sur Tinder","Elle a liké ma photo","Relancer après 3 jours",
-  "Elle répond peu","Obtenir son numéro","Premier message"
-];
-
-function App(){
-  const [key,setKey]=useState(()=>localStorage.getItem("or_key")||"");
-  const [showKey,setShowKey]=useState(!localStorage.getItem("or_key"));
-  const [situation,setSituation]=useState("");
-  const [context,setContext]=useState("");
-  const [result,setResult]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [error,setError]=useState("");
-  const [copied,setCopied]=useState("");
-
-  const saveKey=()=>{localStorage.setItem("or_key",key);setShowKey(false);};
-
-  const copy=(text,id)=>{navigator.clipboard.writeText(text);setCopied(id);setTimeout(()=>setCopied(""),1500);};
-
-  const generate=async()=>{
-    if(!key){setShowKey(true);return;}
-    if(!situation&&!context){setError("Décris la situation !");return;}
-    setError("");setLoading(true);setResult(null);
-    try{
-      const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":`Bearer ${key}`,"HTTP-Referer":location.href},
-        body:JSON.stringify({
-          model:"google/gemma-3-4b-it:free",
-          messages:[
-            {role:"system",content:`Tu es RizzGPT. Réponds UNIQUEMENT en JSON valide sans markdown:
-{"smooth":"message élégant","bold":"message direct","funny":"message drôle","tip":"conseil court"}`},
-            {role:"user",content:`Situation: ${situation||"général"}. ${context}`}
-          ]
-        })
-      });
-      const data=await res.json();
-      if(data.error){setError("Clé invalide. Vérifie sur openrouter.ai");setLoading(false);return;}
-      const raw=data.choices?.[0]?.message?.content||"";
-      let parsed;
-      try{parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());}
-      catch{parsed={smooth:"T'as quelque chose qui me rend curieux… c'est quoi ton secret ?",bold:"Soyons honnêtes — t'as capté mon attention. On se parle ?",funny:"Mon GPS dit que t'es ma destination finale 😂",tip:"Sois naturel, l'authenticité bat toujours le script parfait."};}
-      setResult(parsed);
-    }catch{setError("Erreur réseau.");}
-    setLoading(false);
-  };
-
-  const cards=[
-    {k:"smooth",emoji:"🌊",label:"Smooth",color:"#818cf8"},
-    {k:"bold",emoji:"🔥",label:"Bold",color:"#f87171"},
-    {k:"funny",emoji:"😂",label:"Funny",color:"#fbbf24"},
-  ];
-
-  return(
-    <div style={{maxWidth:560,margin:"0 auto",padding:"24px 16px"}}>
-      <div style={{textAlign:"center",marginBottom:28}}>
-        <div style={{fontSize:44}}>💬</div>
-        <h1 style={{fontSize:32,background:"linear-gradient(135deg,#818cf8,#c084fc)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",margin:"8px 0 4px"}}>RizzGPT</h1>
-        <p style={{color:"#64748b",fontSize:14}}>Messages qui cartonnent 🎯</p>
-      </div>
-
-      {showKey?(
-        <div style={{background:"#111827",border:"1px solid #6366f1",borderRadius:14,padding:20,marginBottom:20}}>
-          <p style={{color:"#a5b4fc",fontSize:14,marginBottom:10}}>
-            🔑 Clé gratuite sur <a href="https://openrouter.ai/keys" target="_blank" style={{color:"#818cf8"}}>openrouter.ai/keys</a>
-          </p>
-          <input type="password" placeholder="sk-or-..." value={key} onChange={e=>setKey(e.target.value)} style={{marginBottom:10}}/>
-          <button onClick={saveKey} style={{width:"100%",background:"#6366f1",padding:"11px 0",color:"#fff",fontSize:14}}>Sauvegarder ✓</button>
-        </div>
-      ):(
-        <button onClick={()=>setShowKey(true)} style={{background:"transparent",border:"1px solid #1e293b",borderRadius:20,padding:"5px 14px",color:"#475569",fontSize:12,marginBottom:20}}>🔑 Changer la clé</button>
-      )}
-
-      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16}}>
-        {SCENARIOS.map(s=>(
-          <button key={s} onClick={()=>setSituation(s)} style={{background:situation===s?"rgba(99,102,241,0.25)":"rgba(255,255,255,0.04)",border:`1px solid ${situation===s?"#6366f1":"#1e293b"}`,color:situation===s?"#a5b4fc":"#64748b",borderRadius:20,padding:"6px 13px",fontSize:12}}>{s}</button>
-        ))}
-      </div>
-
-      <div style={{background:"#111827",borderRadius:14,padding:18,marginBottom:16}}>
-        <input placeholder="📍 Situation..." value={situation} onChange={e=>setSituation(e.target.value)} style={{marginBottom:12}}/>
-        <textarea placeholder="💡 Contexte (prénom, intérêts...)" value={context} onChange={e=>setContext(e.target.value)} rows={3} style={{resize:"vertical"}}/>
-        {error&&<p style={{color:"#f87171",fontSize:13,marginTop:8}}>{error}</p>}
-        <button onClick={generate} disabled={loading} style={{width:"100%",marginTop:14,background:loading?"#1e293b":"linear-gradient(135deg,#6366f1,#a855f7)",padding:"13px 0",color:loading?"#475569":"#fff",fontSize:15}}>
-          {loading?"Génération...":"🚀 Générer mes messages"}
-        </button>
-      </div>
-
-      {result&&(
-        <div>
-          {cards.map(({k,emoji,label,color})=>(
-            <div key={k} style={{background:"#111827",border:`1px solid ${color}33`,borderRadius:14,padding:16,marginBottom:12}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <span style={{color,fontWeight:700,fontSize:13}}>{emoji} {label}</span>
-                <button onClick={()=>copy(result[k],k)} style={{background:copied===k?"rgba(34,197,94,0.2)":"rgba(255,255,255,0.05)",border:`1px solid ${copied===k?"#4ade80":"#334155"}`,color:copied===k?"#4ade80":"#64748b",borderRadius:6,padding:"4px 12px",fontSize:12}}>
-                  {copied===k?"✓ Copié":"Copier"}
-                </button>
-              </div>
-              <p style={{color:"#e2e8f0",fontSize:15,lineHeight:1.6}}>{result[k]}</p>
-            </div>
-          ))}
-          {result.tip&&(
-            <div style={{background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:12,padding:"12px 16px"}}>
-              <span style={{color:"#fbbf24",fontSize:13}}>💡 Conseil : </span>
-              <span style={{color:"#94a3b8",fontSize:13}}>{result.tip}</span>
-            </div>
-          )}
-        </div>
-      )}
+  <div class="card hidden" id="settings">
+    <label>Clé API Groq</label>
+    <input id="key" type="password" placeholder="gsk_..." autocomplete="off">
+    <div class="row mt">
+      <div><label>Modèle texte</label><input id="model" value="llama-3.3-70b-versatile"></div>
+      <div><label>Modèle image</label><input id="vmodel" value="meta-llama/llama-4-scout-17b-16e-instruct"></div>
     </div>
-  );
-}
+    <button class="go" id="saveKey" style="margin-top:12px">ENREGISTRER</button>
+    <div class="hint">La clé reste uniquement dans ton navigateur (localStorage) et n'est envoyée qu'à api.groq.com. Ne mets jamais ta clé dans un fichier public sur GitHub.</div>
+  </div>
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  <div class="card">
+    <label>Son message / la situation</label>
+    <textarea id="ctx" placeholder="Colle ici son dernier message, ou explique la situation (ex : elle ne répond plus depuis 2 jours, première conversation sur Instagram, elle m'a dit « haha tu es fou »…)"></textarea>
+
+    <div class="shot hidden" id="shotBox"><img id="shotImg"><span>Capture jointe</span><button id="shotDel">retirer</button></div>
+    <div class="row mt">
+      <div><label>Son prénom (optionnel)</label><input id="name" placeholder="Ann, Tracy…"></div>
+      <div><label>Langue</label>
+        <select id="lang"><option value="français">Français</option><option value="créole haïtien">Kreyòl</option><option value="anglais">English</option></select>
+      </div>
+    </div>
+    <div class="row mt">
+      <input type="file" id="file" accept="image/*" class="hidden">
+      <button class="icon-btn" id="fileBtn" style="width:100%">📷 Ajouter une capture de conversation</button>
+    </div>
+    <button class="go" id="go">GÉNÉRER</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="card hidden" id="out"></div>
+  <div class="card hidden" id="histCard"><label>Historique</label><div id="hist"></div></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+let image=null;
+
+$('key').value=ls.get('wing_key')||'';
+$('model').value=ls.get('wing_model')||$('model').value;
+$('vmodel').value=ls.get('wing_vmodel')||$('vmodel').value;
+if(!$('key').value)$('settings').classList.remove('hidden');
+
+$('setBtn').onclick=()=>$('settings').classList.toggle('hidden');
+$('saveKey').onclick=()=>{ls.set('wing_key',$('key').value.trim());ls.set('wing_model',$('model').value.trim());ls.set('wing_vmodel',$('vmodel').value.trim());$('settings').classList.add('hidden')};
+
+$('fileBtn').onclick=()=>$('file').click();
+$('file').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const img=new Image(),url=URL.createObjectURL(f);
+  img.onload=()=>{ // réduit l'image pour rester léger
+    const m=1280,r=Math.min(1,m/Math.max(img.width,img.height));
+    const c=document.createElement('canvas');c.width=img.width*r;c.height=img.height*r;
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    image=c.toDataURL('image/jpeg',.8);$('shotImg').src=image;$('shotBox').classList.remove('hidden');URL.revokeObjectURL(url);
+  };img.src=url;
+};
+$('shotDel').onclick=()=>{image=null;$('shotBox').classList.add('hidden');$('file').value=''};
+
+const SYSTEM=`Tu es WING AI, un coach de séduction et de texto pour un homme (Mike, Haïti). Tu écris des messages prêts à envoyer à une femme.
+Règles :
+- Messages COURTS (1 à 2 phrases max), naturels, comme un vrai texto, pas de style robotique, pas de longs paragraphes.
+- Respectueux : jamais de pression, de manipulation, de culpabilisation ni de contenu sexuel explicite. Si elle semble désintéressée ou dit non, recommande de laisser tomber avec classe.
+- Tiens compte de son dernier message et du contexte. Reste dans la langue demandée.
+- Génère EXACTEMENT 4 versions, une par style :
+  1. flirt_subtil : charme léger, compliment indirect, sourire dans le texte
+  2. non_chalant : décontracté, confiant, peu d'effort apparent
+  3. intriguant : crée de la curiosité, pose un petit défi ou une question qui donne envie de répondre
+  4. mysterieux : court, évocateur, en dit moins pour donner envie d'en savoir plus
+- Choisis UNE recommandation claire parmi les 4 et explique pourquoi en une phrase.
+Réponds UNIQUEMENT en JSON valide : {"flirt_subtil":"...","non_chalant":"...","intriguant":"...","mysterieux":"...","recommandation":"flirt_subtil|non_chalant|intriguant|mysterieux","pourquoi":"..."}`;
+
+const LABELS={flirt_subtil:'Flirt subtil',non_chalant:'Non chalant',intriguant:'Intriguant',mysterieux:'Mystérieux'};
+
+$('go').onclick=async()=>{
+  const key=ls.get('wing_key');
+  $('err').textContent='';
+  if(!key){$('settings').classList.remove('hidden');$('err').textContent='Ajoute ta clé Groq d\'abord.';return}
+  const ctx=$('ctx').value.trim();
+  if(!ctx&&!image){$('err').textContent='Colle un message ou ajoute une capture.';return}
+
+  const userText=`Langue des messages : ${$('lang').value}.\n`+($('name').value?`Prénom d'elle : ${$('name').value}.\n`:'')+`Contexte / son message :\n${ctx||'(voir la capture)'}`;
+  const useImg=!!image;
+  const content=useImg?[{type:'text',text:userText+'\nLa capture jointe montre la conversation.'},{type:'image_url',image_url:{url:image}}]:userText;
+  const body={model:useImg?$('vmodel').value:$('model').value,temperature:.9,max_tokens:700,
+    response_format:{type:'json_object'},
+    messages:[{role:'system',content:SYSTEM},{role:'user',content}]};
+
+  $('go').disabled=true;$('go').innerHTML='<span class="spin"></span>GÉNÉRATION…';
+  try{
+    const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error?.message||('Erreur '+r.status));
+    const data=JSON.parse(j.choices[0].message.content);
+    render(data);save(ctx||'(capture)',data);
+  }catch(e){$('err').textContent='Erreur : '+e.message}
+  $('go').disabled=false;$('go').textContent='GÉNÉRER';
+};
+
+function render(d){
+  const best=d.recommandation;
+  let h='';
+  for(const k of Object.keys(LABELS)){
+    if(!d[k])continue;
+    h+=`<div class="msg${k===best?' best':''}"><div class="tag"><span>${LABELS[k]}${k===best?' ★':''}</span><button class="copy" data-t="${esc(d[k])}">Copier</button></div><p>${esc(d[k])}</p></div>`;
+  }
+  h+=`<div class="reco"><b style="color:var(--gold)">Recommandé : ${LABELS[best]||best}</b> — ${esc(d.pourquoi||'')}</div>`;
+  $('out').innerHTML=h;$('out').classList.remove('hidden');
+  $('out').querySelectorAll('.copy').forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(b.dataset.t);b.textContent='Copié ✓';setTimeout(()=>b.textContent='Copier',1200)});
+  $('out').scrollIntoView({behavior:'smooth'});
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function save(ctx,d){
+  let h=[];try{h=JSON.parse(ls.get('wing_hist')||'[]')}catch(e){}
+  h.unshift({ctx:ctx.slice(0,80),d});h=h.slice(0,15);ls.set('wing_hist',JSON.stringify(h));showHist();
+}
+function showHist(){
+  let h=[];try{h=JSON.parse(ls.get('wing_hist')||'[]')}catch(e){}
+  if(!h.length)return;
+  $('histCard').classList.remove('hidden');
+  $('hist').innerHTML=h.map((x,i)=>`<div class="hist" data-i="${i}">${esc(x.ctx)}</div>`).join('');
+  $('hist').querySelectorAll('.hist').forEach(el=>el.onclick=()=>render(h[el.dataset.i].d));
+}
+showHist();
 </script>
 </body>
 </html>
