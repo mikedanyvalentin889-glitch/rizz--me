@@ -23,6 +23,10 @@
   .mt{margin-top:12px}
   .go{width:100%;margin-top:14px;padding:14px;border:none;border-radius:12px;background:linear-gradient(90deg,var(--gold),var(--gold2));color:#111;font-weight:700;font-size:15px;letter-spacing:2px;cursor:pointer}
   .go:disabled{opacity:.5;cursor:wait}
+  .shots{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .thumb{position:relative}.thumb img{height:70px;border-radius:8px;border:1px solid var(--line);display:block}
+  .thumb b{position:absolute;top:-6px;right:-6px;background:var(--gold);color:#111;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;font-size:13px;cursor:pointer}
+  .drag{outline:2px dashed var(--gold)}
   .shot{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:13px;color:var(--mute)}
   .shot img{height:48px;border-radius:8px;border:1px solid var(--line)}
   .shot button{background:none;border:none;color:var(--gold);cursor:pointer;font-size:13px}
@@ -66,7 +70,8 @@
 
     <label class="mt" style="margin-top:12px">Ce que tu sais d'elle (optionnel)</label>
     <textarea id="about" style="min-height:62px" placeholder="Ses goûts, bio, ce qu'elle poste, ce qu'elle t'a déjà dit, votre histoire… Plus c'est précis, plus les messages sont uniques."></textarea>
-    <div class="shot hidden" id="shotBox"><img id="shotImg"><span>Capture jointe</span><button id="shotDel">retirer</button></div>
+    <div class="shots" id="shots"></div>
+
     <div class="row mt">
       <div><label>Son prénom (optionnel)</label><input id="name" placeholder="Ann, Tracy…"></div>
       <div><label>Langue</label>
@@ -74,8 +79,8 @@
       </div>
     </div>
     <div class="row mt">
-      <input type="file" id="file" accept="image/*" class="hidden">
-      <button class="icon-btn" id="fileBtn" style="width:100%">📷 Ajouter une capture de conversation</button>
+      <input type="file" id="file" accept="image/*" multiple class="hidden">
+      <button class="icon-btn" id="fileBtn" style="width:100%">📷 Ajouter des images (jusqu'à 4) · ou colle / glisse-les ici</button>
     </div>
     <label style="margin-top:12px">Objectif</label>
     <select id="goal"><option value="répondre naturellement à son dernier message">Répondre à son message</option><option value="ouvrir la conversation (premier message)">Premier message</option><option value="relancer la conversation après un silence">Relancer</option><option value="faire monter la tension et le flirt">Monter le flirt</option><option value="la mener vers une proposition de rendez-vous">Vers un rendez-vous</option></select>
@@ -91,7 +96,7 @@
 <script>
 const $=id=>document.getElementById(id);
 const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
-let image=null;
+let images=[];
 
 $('key').value=ls.get('wing_key')||'';
 $('model').value=ls.get('wing_model')||'';
@@ -102,17 +107,29 @@ $('setBtn').onclick=()=>$('settings').classList.toggle('hidden');
 $('saveKey').onclick=()=>{ls.set('wing_key',$('key').value.trim());ls.set('wing_model',$('model').value.trim());ls.set('wing_vmodel',$('vmodel').value.trim());$('settings').classList.add('hidden')};
 
 $('fileBtn').onclick=()=>$('file').click();
-$('file').onchange=e=>{
-  const f=e.target.files[0];if(!f)return;
-  const img=new Image(),url=URL.createObjectURL(f);
-  img.onload=()=>{ // réduit l'image pour rester léger
-    const m=1280,r=Math.min(1,m/Math.max(img.width,img.height));
-    const c=document.createElement('canvas');c.width=img.width*r;c.height=img.height*r;
-    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-    image=c.toDataURL('image/jpeg',.8);$('shotImg').src=image;$('shotBox').classList.remove('hidden');URL.revokeObjectURL(url);
-  };img.src=url;
-};
-$('shotDel').onclick=()=>{image=null;$('shotBox').classList.add('hidden');$('file').value=''};
+function addFiles(files){
+  [...files].filter(f=>f.type.startsWith('image/')).forEach(f=>{
+    if(images.length>=4){$('err').textContent='Maximum 4 images.';return}
+    const img=new Image(),url=URL.createObjectURL(f);
+    img.onload=()=>{
+      const m=1280,r=Math.min(1,m/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');c.width=img.width*r;c.height=img.height*r;
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      images.push(c.toDataURL('image/jpeg',.8));URL.revokeObjectURL(url);drawShots();
+    };
+    img.onerror=()=>{$('err').textContent="Image illisible : "+f.name};
+    img.src=url;
+  });
+}
+function drawShots(){
+  $('shots').innerHTML=images.map((d,i)=>`<div class="thumb"><img src="${d}"><b data-i="${i}">×</b></div>`).join('');
+  $('shots').querySelectorAll('b').forEach(b=>b.onclick=()=>{images.splice(+b.dataset.i,1);drawShots()});
+}
+$('file').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+document.addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])];if(f.length){e.preventDefault();addFiles(f)}});
+['dragover','dragenter'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();document.body.classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();document.body.classList.remove('drag')}));
+document.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
 
 const SYSTEM=`Tu es WING AI, un coach de texto d'élite pour Mike, un homme en Haïti. Tu écris des messages à envoyer à une femme. Ton but : qu'elle sourie, soit surprise, et ait envie de répondre. Pas de message de "robot gentil".
 
@@ -151,7 +168,7 @@ async function autoModel(key,vision,force){
   let pick;
   if(vision){
     pick=ids.find(i=>/llama-4-(scout|maverick)/.test(i))||ids.find(i=>/vision/i.test(i));
-    if(!pick)throw new Error("Aucun modèle image trouvé sur ta clé Groq. Écris le message sans capture.");
+    if(!pick)throw new Error("Aucun modèle image trouvé sur ta clé Groq. Écris le message sans image.");
   }else{
     const pref=[/gpt-oss-120b/,/llama-3\.3-70b/,/qwen.*(32b|27b)/,/kimi/,/gpt-oss-20b/,/llama-3\.1-8b/];
     for(const re of pref){pick=ids.find(i=>re.test(i));if(pick)break}
@@ -185,11 +202,11 @@ async function run(boost){
   $('err').textContent='';
   if(!key){$('settings').classList.remove('hidden');$('err').textContent='Ajoute ta clé Groq d\'abord.';return}
   const ctx=$('ctx').value.trim();
-  if(!ctx&&!image){$('err').textContent='Colle un message ou ajoute une capture.';return}
+  if(!ctx&&!images.length){$('err').textContent='Colle un message ou ajoute une image.';return}
 
-  const userText=`Langue des messages : ${$('lang').value}.\nObjectif : ${$('goal').value}.\n`+($('name').value?`Prénom d'elle : ${$('name').value}.\n`:'')+($('about').value.trim()?`Ce qu'on sait d'elle :\n${$('about').value.trim()}\n`:'')+`Contexte / son message :\n${ctx||'(voir la capture)'}`+(boost?'\n\nCONSIGNE SUPPLÉMENTAIRE : sois nettement plus audacieux, drôle et surprenant que d\'habitude. Évite toute formule attendue. Prends un angle que personne n\'utiliserait. Reste respectueux.':'');
-  const useImg=!!image;
-  const content=useImg?[{type:'text',text:userText+'\nLa capture jointe montre la conversation.'},{type:'image_url',image_url:{url:image}}]:userText;
+  const userText=`Langue des messages : ${$('lang').value}.\nObjectif : ${$('goal').value}.\n`+($('name').value?`Prénom d'elle : ${$('name').value}.\n`:'')+($('about').value.trim()?`Ce qu'on sait d'elle :\n${$('about').value.trim()}\n`:'')+`Contexte / son message :\n${ctx||'(voir les images)'}`+(boost?'\n\nCONSIGNE SUPPLÉMENTAIRE : sois nettement plus audacieux, drôle et surprenant que d\'habitude. Évite toute formule attendue. Prends un angle que personne n\'utiliserait. Reste respectueux.':'');
+  const useImg=images.length>0;
+  const content=useImg?[{type:'text',text:userText+'\nLes images jointes montrent la conversation ou son profil / ses photos : lis-les attentivement (messages, ton, détails visibles) et utilise ces détails.'},...images.map(u=>({type:'image_url',image_url:{url:u}}))]:userText;
   const messages=[{role:'system',content:SYSTEM},{role:'user',content}];
 
   $('go').disabled=true;$('go').innerHTML='<span class="spin"></span>GÉNÉRATION…';
@@ -204,7 +221,7 @@ async function run(boost){
         res=await ask(key,model,messages);
       }else throw e;
     }
-    render(res);save(ctx||'(capture)',res);
+    render(res);save(ctx||'(images)',res);
   }catch(e){$('err').textContent='Erreur : '+e.message}
   $('go').disabled=false;$('go').textContent='GÉNÉRER';
 }
