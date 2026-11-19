@@ -53,8 +53,8 @@
     <label>Clé API Groq</label>
     <input id="key" type="password" placeholder="gsk_..." autocomplete="off">
     <div class="row mt">
-      <div><label>Modèle texte</label><input id="model" value="llama-3.3-70b-versatile"></div>
-      <div><label>Modèle image</label><input id="vmodel" value="meta-llama/llama-4-scout-17b-16e-instruct"></div>
+      <div><label>Modèle texte (vide = auto)</label><input id="model" placeholder="auto (détecté depuis ta clé)"></div>
+      <div><label>Modèle image (vide = auto)</label><input id="vmodel" placeholder="auto (détecté depuis ta clé)"></div>
     </div>
     <button class="go" id="saveKey" style="margin-top:12px">ENREGISTRER</button>
     <div class="hint">La clé reste uniquement dans ton navigateur (localStorage) et n'est envoyée qu'à api.groq.com. Ne mets jamais ta clé dans un fichier public sur GitHub.</div>
@@ -89,8 +89,8 @@ const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:
 let image=null;
 
 $('key').value=ls.get('wing_key')||'';
-$('model').value=ls.get('wing_model')||$('model').value;
-$('vmodel').value=ls.get('wing_vmodel')||$('vmodel').value;
+$('model').value=ls.get('wing_model')||'';
+$('vmodel').value=ls.get('wing_vmodel')||'';
 if(!$('key').value)$('settings').classList.remove('hidden');
 
 $('setBtn').onclick=()=>$('settings').classList.toggle('hidden');
@@ -122,6 +122,46 @@ Règles :
 - Choisis UNE recommandation claire parmi les 4 et explique pourquoi en une phrase.
 Réponds UNIQUEMENT en JSON valide : {"flirt_subtil":"...","non_chalant":"...","intriguant":"...","mysterieux":"...","recommandation":"flirt_subtil|non_chalant|intriguant|mysterieux","pourquoi":"..."}`;
 
+
+async function groq(key,path,opts){
+  const r=await fetch('https://api.groq.com/openai/v1/'+path,Object.assign({headers:{'Content-Type':'application/json','Authorization':'Bearer '+key}},opts||{}));
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error?.message||('Erreur '+r.status));
+  return j;
+}
+async function autoModel(key,vision,force){
+  const j=await groq(key,'models');
+  const ids=j.data.map(m=>m.id).filter(id=>!/whisper|tts|guard|embed|safeguard|prompt-guard|compound|orpheus/i.test(id));
+  let pick;
+  if(vision){
+    pick=ids.find(i=>/llama-4-(scout|maverick)/.test(i))||ids.find(i=>/vision/i.test(i));
+    if(!pick)throw new Error("Aucun modèle image trouvé sur ta clé Groq. Écris le message sans capture.");
+  }else{
+    const pref=[/gpt-oss-120b/,/llama-3\.3-70b/,/qwen.*(32b|27b)/,/kimi/,/gpt-oss-20b/,/llama-3\.1-8b/];
+    for(const re of pref){pick=ids.find(i=>re.test(i));if(pick)break}
+    if(!pick)pick=ids[0];
+    if(!pick)throw new Error("Aucun modèle disponible sur ta clé.");
+  }
+  ls.set(vision?'wing_vmodel':'wing_model',pick);
+  $(vision?'vmodel':'model').value=pick;
+  return pick;
+}
+function parseJSON(t){
+  try{return JSON.parse(t)}catch(e){}
+  const m=t.match(/\{[\s\S]*\}/);if(m)return JSON.parse(m[0]);
+  throw new Error('Réponse illisible, réessaie.');
+}
+async function ask(key,model,messages){
+  const base={model,temperature:.9,max_tokens:2500,messages};
+  let j;
+  try{j=await groq(key,'chat/completions',{method:'POST',body:JSON.stringify(Object.assign({response_format:{type:'json_object'}},base))})}
+  catch(e){
+    if(/response_format|json/i.test(e.message))j=await groq(key,'chat/completions',{method:'POST',body:JSON.stringify(base)});
+    else throw e;
+  }
+  return parseJSON(j.choices[0].message.content||'');
+}
+
 const LABELS={flirt_subtil:'Flirt subtil',non_chalant:'Non chalant',intriguant:'Intriguant',mysterieux:'Mystérieux'};
 
 $('go').onclick=async()=>{
@@ -134,17 +174,21 @@ $('go').onclick=async()=>{
   const userText=`Langue des messages : ${$('lang').value}.\n`+($('name').value?`Prénom d'elle : ${$('name').value}.\n`:'')+`Contexte / son message :\n${ctx||'(voir la capture)'}`;
   const useImg=!!image;
   const content=useImg?[{type:'text',text:userText+'\nLa capture jointe montre la conversation.'},{type:'image_url',image_url:{url:image}}]:userText;
-  const body={model:useImg?$('vmodel').value:$('model').value,temperature:.9,max_tokens:700,
-    response_format:{type:'json_object'},
-    messages:[{role:'system',content:SYSTEM},{role:'user',content}]};
+  const messages=[{role:'system',content:SYSTEM},{role:'user',content}];
 
   $('go').disabled=true;$('go').innerHTML='<span class="spin"></span>GÉNÉRATION…';
   try{
-    const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)});
-    const j=await r.json();
-    if(!r.ok)throw new Error(j.error?.message||('Erreur '+r.status));
-    const data=JSON.parse(j.choices[0].message.content);
-    render(data);save(ctx||'(capture)',data);
+    let model=(useImg?$('vmodel').value:$('model').value).trim();
+    if(!model)model=await autoModel(key,useImg);
+    let res;
+    try{res=await ask(key,model,messages)}
+    catch(e){
+      if(/does not exist|not have access|decommission|model_not_found|no longer supported/i.test(e.message)){
+        model=await autoModel(key,useImg,true); // le modèle a changé : on re-détecte
+        res=await ask(key,model,messages);
+      }else throw e;
+    }
+    render(res);save(ctx||'(capture)',res);
   }catch(e){$('err').textContent='Erreur : '+e.message}
   $('go').disabled=false;$('go').textContent='GÉNÉRER';
 };
