@@ -64,6 +64,8 @@
     <label>Son message / la situation</label>
     <textarea id="ctx" placeholder="Colle ici son dernier message, ou explique la situation (ex : elle ne répond plus depuis 2 jours, première conversation sur Instagram, elle m'a dit « haha tu es fou »…)"></textarea>
 
+    <label class="mt" style="margin-top:12px">Ce que tu sais d'elle (optionnel)</label>
+    <textarea id="about" style="min-height:62px" placeholder="Ses goûts, bio, ce qu'elle poste, ce qu'elle t'a déjà dit, votre histoire… Plus c'est précis, plus les messages sont uniques."></textarea>
     <div class="shot hidden" id="shotBox"><img id="shotImg"><span>Capture jointe</span><button id="shotDel">retirer</button></div>
     <div class="row mt">
       <div><label>Son prénom (optionnel)</label><input id="name" placeholder="Ann, Tracy…"></div>
@@ -75,7 +77,10 @@
       <input type="file" id="file" accept="image/*" class="hidden">
       <button class="icon-btn" id="fileBtn" style="width:100%">📷 Ajouter une capture de conversation</button>
     </div>
+    <label style="margin-top:12px">Objectif</label>
+    <select id="goal"><option value="répondre naturellement à son dernier message">Répondre à son message</option><option value="ouvrir la conversation (premier message)">Premier message</option><option value="relancer la conversation après un silence">Relancer</option><option value="faire monter la tension et le flirt">Monter le flirt</option><option value="la mener vers une proposition de rendez-vous">Vers un rendez-vous</option></select>
     <button class="go" id="go">GÉNÉRER</button>
+    <button class="icon-btn hidden" id="boost" style="width:100%;margin-top:8px">🔥 Plus audacieux, surprends-moi</button>
     <div class="err" id="err"></div>
   </div>
 
@@ -109,18 +114,29 @@ $('file').onchange=e=>{
 };
 $('shotDel').onclick=()=>{image=null;$('shotBox').classList.add('hidden');$('file').value=''};
 
-const SYSTEM=`Tu es WING AI, un coach de séduction et de texto pour un homme (Mike, Haïti). Tu écris des messages prêts à envoyer à une femme.
-Règles :
-- Messages COURTS (1 à 2 phrases max), naturels, comme un vrai texto, pas de style robotique, pas de longs paragraphes.
-- Respectueux : jamais de pression, de manipulation, de culpabilisation ni de contenu sexuel explicite. Si elle semble désintéressée ou dit non, recommande de laisser tomber avec classe.
-- Tiens compte de son dernier message et du contexte. Reste dans la langue demandée.
-- Génère EXACTEMENT 4 versions, une par style :
-  1. flirt_subtil : charme léger, compliment indirect, sourire dans le texte
-  2. non_chalant : décontracté, confiant, peu d'effort apparent
-  3. intriguant : crée de la curiosité, pose un petit défi ou une question qui donne envie de répondre
-  4. mysterieux : court, évocateur, en dit moins pour donner envie d'en savoir plus
-- Choisis UNE recommandation claire parmi les 4 et explique pourquoi en une phrase.
-Réponds UNIQUEMENT en JSON valide : {"flirt_subtil":"...","non_chalant":"...","intriguant":"...","mysterieux":"...","recommandation":"flirt_subtil|non_chalant|intriguant|mysterieux","pourquoi":"..."}`;
+const SYSTEM=`Tu es WING AI, un coach de texto d'élite pour Mike, un homme en Haïti. Tu écris des messages à envoyer à une femme. Ton but : qu'elle sourie, soit surprise, et ait envie de répondre. Pas de message de "robot gentil".
+
+MÉTHODE (fais-la dans le champ "lecture" avant d'écrire) :
+1. Lis son énergie (longueur, emojis, ton, intérêt réel ou poli) et son style. COLLE à son niveau d'énergie : si elle écrit sec, ne sur-écris pas.
+2. Repère les accroches concrètes : un détail qu'elle a dit, un mot précis, une photo, un goût, une contradiction amusante.
+3. Choisis une tactique différente pour chaque style, avec une STRUCTURE différente (pas 4 variantes de la même phrase).
+
+LES 4 STYLES :
+- flirt_subtil : compliment SPÉCIFIQUE et inattendu (sur sa façon d'être, d'écrire, un détail), pas sur le physique générique. Un sourire dans la voix.
+- non_chalant : confiance détendue, taquinerie douce, tu t'en fiches un peu (pas froid, pas distant). Peut contredire gentiment ou la défier pour rire.
+- intriguant : boucle ouverte. Un mini-défi, un jeu ("je parie que..."), une théorie sur elle, un faux ultimatum drôle, un jeu de rôle léger. Donne-lui une raison de répondre.
+- mysterieux : très court, évocateur, laisse un vide qu'elle veut combler. Une demi-phrase peut suffire.
+
+TECHNIQUES À UTILISER SELON LE CONTEXTE : callback à un détail qu'elle a donné, push-pull léger (taquiner puis valoriser), exagération comique, hypothèse amusante sur elle, "tu es du genre à...", humour de situation, tournure locale naturelle d'Haïti.
+
+INTERDITS (les "tells" d'une IA) : "Hey / Salut ça va ?", questions de sondage ("tu fais quoi dans la vie ?", "c'est quoi ton plat préféré ?"), compliments génériques (belle, jolie, magnifique seuls), tirets cadratin "—", points d'exclamation en rafale, phrases trop parfaites ou trop longues, plus d'un emoji, ton thérapeute ou poète, pickup lines clichés ("tu as mal ?"). Écris comme un vrai texto : court, parfois minuscule, naturel, légèrement imparfait. Chaque message : 1 à 2 phrases max (le mystérieux peut faire 3 à 8 mots).
+
+LIMITES : jamais de pression, culpabilisation, insulte déguisée (pas de "negging"), manipulation ni contenu sexuel explicite. Si elle est clairement désintéressée ou dit non, la recommandation est de lâcher avec classe (un message court et élégant ou rien).
+
+Écris dans la langue demandée (créole haïtien naturel ou français naturel, pas de traduction mot à mot).
+
+Réponds UNIQUEMENT en JSON valide, dans cet ordre :
+{"lecture":"2 phrases max : son énergie, son intérêt, l'accroche choisie","flirt_subtil":"...","non_chalant":"...","intriguant":"...","mysterieux":"...","recommandation":"flirt_subtil|non_chalant|intriguant|mysterieux","pourquoi":"1 phrase"}`;
 
 
 async function groq(key,path,opts){
@@ -152,7 +168,7 @@ function parseJSON(t){
   throw new Error('Réponse illisible, réessaie.');
 }
 async function ask(key,model,messages){
-  const base={model,temperature:.9,max_tokens:2500,messages};
+  const base={model,temperature:1,max_tokens:2500,messages};
   let j;
   try{j=await groq(key,'chat/completions',{method:'POST',body:JSON.stringify(Object.assign({response_format:{type:'json_object'}},base))})}
   catch(e){
@@ -164,14 +180,14 @@ async function ask(key,model,messages){
 
 const LABELS={flirt_subtil:'Flirt subtil',non_chalant:'Non chalant',intriguant:'Intriguant',mysterieux:'Mystérieux'};
 
-$('go').onclick=async()=>{
+async function run(boost){
   const key=ls.get('wing_key');
   $('err').textContent='';
   if(!key){$('settings').classList.remove('hidden');$('err').textContent='Ajoute ta clé Groq d\'abord.';return}
   const ctx=$('ctx').value.trim();
   if(!ctx&&!image){$('err').textContent='Colle un message ou ajoute une capture.';return}
 
-  const userText=`Langue des messages : ${$('lang').value}.\n`+($('name').value?`Prénom d'elle : ${$('name').value}.\n`:'')+`Contexte / son message :\n${ctx||'(voir la capture)'}`;
+  const userText=`Langue des messages : ${$('lang').value}.\nObjectif : ${$('goal').value}.\n`+($('name').value?`Prénom d'elle : ${$('name').value}.\n`:'')+($('about').value.trim()?`Ce qu'on sait d'elle :\n${$('about').value.trim()}\n`:'')+`Contexte / son message :\n${ctx||'(voir la capture)'}`+(boost?'\n\nCONSIGNE SUPPLÉMENTAIRE : sois nettement plus audacieux, drôle et surprenant que d\'habitude. Évite toute formule attendue. Prends un angle que personne n\'utiliserait. Reste respectueux.':'');
   const useImg=!!image;
   const content=useImg?[{type:'text',text:userText+'\nLa capture jointe montre la conversation.'},{type:'image_url',image_url:{url:image}}]:userText;
   const messages=[{role:'system',content:SYSTEM},{role:'user',content}];
@@ -191,11 +207,14 @@ $('go').onclick=async()=>{
     render(res);save(ctx||'(capture)',res);
   }catch(e){$('err').textContent='Erreur : '+e.message}
   $('go').disabled=false;$('go').textContent='GÉNÉRER';
-};
+}
+$('go').onclick=()=>run(false);
+$('boost').onclick=()=>run(true);
 
 function render(d){
   const best=d.recommandation;
-  let h='';
+  let h=d.lecture?`<div class="reco" style="margin:0 0 14px;font-style:italic">🔎 ${esc(d.lecture)}</div>`:'';
+  $('boost').classList.remove('hidden');
   for(const k of Object.keys(LABELS)){
     if(!d[k])continue;
     h+=`<div class="msg${k===best?' best':''}"><div class="tag"><span>${LABELS[k]}${k===best?' ★':''}</span><button class="copy" data-t="${esc(d[k])}">Copier</button></div><p>${esc(d[k])}</p></div>`;
