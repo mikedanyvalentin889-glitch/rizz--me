@@ -41,6 +41,19 @@
   .hint{font-size:12px;color:var(--mute);margin-top:6px;line-height:1.4}
   .hist{font-size:13px;color:var(--mute);padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer}
   .hist:hover{color:var(--text)}
+  .tabs{display:flex;gap:8px;margin-bottom:16px}
+  .tab{flex:1;background:var(--card);border:1px solid var(--line);color:var(--mute);border-radius:12px;padding:11px;font-size:13px;letter-spacing:2px;text-transform:uppercase;cursor:pointer}
+  .tab.on{color:#111;background:linear-gradient(90deg,var(--gold),var(--gold2));border-color:transparent;font-weight:700}
+  .girl{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer}
+  .girl:hover{border-color:var(--gold)}
+  .girl h3{font-size:16px;margin-bottom:3px}.girl small{color:var(--mute);font-size:12px;display:block;line-height:1.35}
+  .badge{background:#0c0c0f;border:1px solid var(--line);color:var(--gold);border-radius:20px;padding:3px 10px;font-size:12px;white-space:nowrap}
+  .bub{max-width:88%;padding:9px 12px;border-radius:14px;font-size:14.5px;line-height:1.4;margin:6px 0;white-space:pre-wrap}
+  .her{background:#1d1d22;border-bottom-left-radius:4px}
+  .me{background:linear-gradient(90deg,#8d733e,#b89955);color:#111;margin-left:auto;border-bottom-right-radius:4px}
+  .when{font-size:11px;color:var(--mute);margin:12px 0 2px;letter-spacing:1px}
+  .link{background:none;border:none;color:var(--gold);cursor:pointer;font-size:13px;padding:4px 0}
+  .del{color:#c66}
   .hidden{display:none}
   .spin{display:inline-block;width:14px;height:14px;border:2px solid #111;border-top-color:transparent;border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-right:8px}
   @keyframes s{to{transform:rotate(360deg)}}
@@ -53,6 +66,8 @@
     <button class="icon-btn" id="setBtn">⚙ Clé Groq</button>
   </header>
 
+  <div class="tabs"><button class="tab on" id="tabGen">Générer</button><button class="tab" id="tabConv">Conversations</button></div>
+
   <div class="card hidden" id="settings">
     <label>Clé API Groq</label>
     <input id="key" type="password" placeholder="gsk_..." autocomplete="off">
@@ -64,6 +79,7 @@
     <div class="hint">La clé reste uniquement dans ton navigateur (localStorage) et n'est envoyée qu'à api.groq.com. Ne mets jamais ta clé dans un fichier public sur GitHub.</div>
   </div>
 
+  <div id="viewGen">
   <div class="card">
     <label>Son message / la situation</label>
     <textarea id="ctx" placeholder="Colle ici son dernier message, ou explique la situation (ex : elle ne répond plus depuis 2 jours, première conversation sur Instagram, elle m'a dit « haha tu es fou »…)"></textarea>
@@ -73,7 +89,7 @@
     <div class="shots" id="shots"></div>
 
     <div class="row mt">
-      <div><label>Son prénom (optionnel)</label><input id="name" placeholder="Ann, Tracy…"></div>
+      <div><label>Son prénom (optionnel)</label><input id="name" list="names" placeholder="Ann, Tracy…" autocomplete="off"><datalist id="names"></datalist></div>
       <div><label>Langue</label>
         <select id="lang"><option value="français">Français</option><option value="créole haïtien">Kreyòl</option><option value="anglais">English</option></select>
       </div>
@@ -90,7 +106,8 @@
   </div>
 
   <div class="card hidden" id="out"></div>
-  <div class="card hidden" id="histCard"><label>Historique</label><div id="hist"></div></div>
+  </div>
+  <div id="viewConv" class="hidden"></div>
 </div>
 
 <script>
@@ -221,40 +238,129 @@ async function run(boost){
         res=await ask(key,model,messages);
       }else throw e;
     }
-    render(res);save(ctx||'(images)',res);
+    const it=save(ctx||'(images)',res);render(res,it);
   }catch(e){$('err').textContent='Erreur : '+e.message}
   $('go').disabled=false;$('go').textContent='GÉNÉRER';
 }
 $('go').onclick=()=>run(false);
 $('boost').onclick=()=>run(true);
 
-function render(d){
-  const best=d.recommandation;
-  let h=d.lecture?`<div class="reco" style="margin:0 0 14px;font-style:italic">🔎 ${esc(d.lecture)}</div>`:'';
-  $('boost').classList.remove('hidden');
-  for(const k of Object.keys(LABELS)){
-    if(!d[k])continue;
-    h+=`<div class="msg${k===best?' best':''}"><div class="tag"><span>${LABELS[k]}${k===best?' ★':''}</span><button class="copy" data-t="${esc(d[k])}">Copier</button></div><p>${esc(d[k])}</p></div>`;
-  }
-  h+=`<div class="reco"><b style="color:var(--gold)">Recommandé : ${LABELS[best]||best}</b> — ${esc(d.pourquoi||'')}</div>`;
-  $('out').innerHTML=h;$('out').classList.remove('hidden');
-  $('out').querySelectorAll('.copy').forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(b.dataset.t);b.textContent='Copié ✓';setTimeout(()=>b.textContent='Copier',1200)});
-  $('out').scrollIntoView({behavior:'smooth'});
-}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
+/* ===== Données : conversations par fille, sauvegardées dans le navigateur ===== */
+function loadDB(){
+  try{const x=JSON.parse(ls.get('wing_db'));if(x&&Array.isArray(x.girls))return x}catch(e){}
+  const d={girls:[]};
+  try{const old=JSON.parse(ls.get('wing_hist')||'[]');
+    if(old.length)d.girls.push({id:'g0',name:'Sans nom',about:'',items:old.map((o,i)=>({id:'i'+i,t:Date.now()-i,ctx:o.ctx,goal:'',d:o.d,sent:null}))})}catch(e){}
+  return d;
+}
+let db=loadDB(),curGirl=null,ref=null;
+function persist(){ls.set('wing_db',JSON.stringify(db))}
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+function girlFor(name){
+  name=(name||'').trim()||'Sans nom';
+  let g=db.girls.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(!g){g={id:'g'+Date.now(),name,about:'',items:[]};db.girls.push(g)}
+  return g;
+}
+function fillNames(){$('names').innerHTML=db.girls.filter(g=>g.name!=='Sans nom').map(g=>`<option value="${esc(g.name)}">`).join('')}
+$('name').addEventListener('change',()=>{
+  const g=db.girls.find(x=>x.name.toLowerCase()===$('name').value.trim().toLowerCase());
+  if(g&&g.about&&!$('about').value.trim())$('about').value=g.about;
+});
+fillNames();
+
+/* ===== Affichage des propositions ===== */
+function msgsHTML(d,it){
+  const best=d.recommandation;
+  let h=d.lecture?`<div class="reco" style="margin:0 0 14px;font-style:italic">🔎 ${esc(d.lecture)}</div>`:'';
+  for(const k of Object.keys(LABELS)){
+    if(!d[k])continue;
+    const sent=it&&it.sent&&it.sent.k===k;
+    h+=`<div class="msg${k===best?' best':''}"><div class="tag"><span>${LABELS[k]}${k===best?' ★':''}${sent?' · envoyé ✓':''}</span><button class="copy" data-k="${k}" data-t="${esc(d[k])}">Copier</button></div><p>${esc(d[k])}</p></div>`;
+  }
+  h+=`<div class="reco"><b style="color:var(--gold)">Recommandé : ${LABELS[best]||best}</b> — ${esc(d.pourquoi||'')}</div>`;
+  return h;
+}
+function wireCopy(root,it){
+  root.querySelectorAll('.copy').forEach(b=>b.onclick=()=>{
+    navigator.clipboard.writeText(b.dataset.t);
+    if(it){it.sent={k:b.dataset.k,text:b.dataset.t};persist()} // copier = marqué comme envoyé
+    b.textContent='Copié ✓';setTimeout(()=>b.textContent='Copier',1200);
+  });
+}
+function render(d,item){
+  $('boost').classList.remove('hidden');
+  $('out').innerHTML=msgsHTML(d,item);$('out').classList.remove('hidden');
+  wireCopy($('out'),item);
+  $('out').scrollIntoView({behavior:'smooth'});
+}
 function save(ctx,d){
-  let h=[];try{h=JSON.parse(ls.get('wing_hist')||'[]')}catch(e){}
-  h.unshift({ctx:ctx.slice(0,80),d});h=h.slice(0,15);ls.set('wing_hist',JSON.stringify(h));showHist();
+  const g=girlFor($('name').value);
+  if($('about').value.trim())g.about=$('about').value.trim();
+  const it={id:'i'+Date.now(),t:Date.now(),ctx:ctx.slice(0,2000),goal:$('goal').selectedOptions[0].text,d,sent:null,imgs:images.length};
+  g.items.unshift(it);g.items=g.items.slice(0,200);
+  persist();fillNames();
+  return it;
 }
-function showHist(){
-  let h=[];try{h=JSON.parse(ls.get('wing_hist')||'[]')}catch(e){}
-  if(!h.length)return;
-  $('histCard').classList.remove('hidden');
-  $('hist').innerHTML=h.map((x,i)=>`<div class="hist" data-i="${i}">${esc(x.ctx)}</div>`).join('');
-  $('hist').querySelectorAll('.hist').forEach(el=>el.onclick=()=>render(h[el.dataset.i].d));
+
+/* ===== Onglets ===== */
+function tab(t){
+  $('viewGen').classList.toggle('hidden',t!=='gen');$('viewConv').classList.toggle('hidden',t!=='conv');
+  $('tabGen').classList.toggle('on',t==='gen');$('tabConv').classList.toggle('on',t==='conv');
+  if(t==='conv')showConv();
 }
-showHist();
+$('tabGen').onclick=()=>tab('gen');$('tabConv').onclick=()=>tab('conv');
+
+const fmt=t=>new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+function lastAct(g){return g.items.length?g.items[0].t:0}
+
+function showConv(){curGirl?showThread():showList()}
+function showList(){
+  const gs=[...db.girls].sort((a,b)=>lastAct(b)-lastAct(a));
+  let h='';
+  if(!gs.length)h='<div class="card"><div class="hint">Aucune conversation pour l\'instant. Génère des messages en indiquant son prénom : elle apparaîtra ici avec tout l\'historique.</div></div>';
+  gs.forEach(g=>{
+    const l=g.items[0];
+    h+=`<div class="card girl" data-id="${g.id}"><div><h3>${esc(g.name)}</h3><small>${l?'Elle : '+esc(l.ctx.slice(0,70)):'Pas encore de message'}</small>${l&&l.sent?`<small style="color:var(--gold)">Toi : ${esc(l.sent.text.slice(0,70))}</small>`:''}</div><div style="text-align:right"><span class="badge">${g.items.length}</span><small>${l?fmt(l.t):''}</small></div></div>`;
+  });
+  h+=`<div class="card"><label>Sauvegarde</label><div class="row"><button class="icon-btn" id="exp">⬇ Exporter</button><button class="icon-btn" id="imp">⬆ Importer</button></div><input type="file" id="impf" accept="application/json" class="hidden"><div class="hint">Tout est gardé dans ce navigateur. Si tu vides les données du navigateur ou changes d'appareil, tu perds l'historique : exporte de temps en temps.</div></div>`;
+  $('viewConv').innerHTML=h;
+  $('viewConv').querySelectorAll('.girl').forEach(el=>el.onclick=()=>{curGirl=el.dataset.id;showThread()});
+  $('exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}));a.download='wing-ai-sauvegarde.json';a.click()};
+  $('imp').onclick=()=>$('impf').click();
+  $('impf').onchange=async e=>{
+    try{const x=JSON.parse(await e.target.files[0].text());if(!Array.isArray(x.girls))throw 0;
+      x.girls.forEach(ng=>{const g=db.girls.find(o=>o.name.toLowerCase()===ng.name.toLowerCase());
+        if(!g)db.girls.push(ng);else{const ids=new Set(g.items.map(i=>i.id));ng.items.forEach(i=>{if(!ids.has(i.id))g.items.push(i)});g.items.sort((a,b)=>b.t-a.t);if(!g.about)g.about=ng.about||''}});
+      persist();fillNames();showList()}catch(err){alert('Fichier invalide.')}
+  };
+}
+function showThread(){
+  const g=db.girls.find(x=>x.id===curGirl);if(!g){curGirl=null;return showList()}
+  let h=`<div class="card"><div class="girl" style="cursor:default"><div><button class="link" id="back">← Retour</button><h3 style="font-size:20px">${esc(g.name)}</h3></div><div><button class="link" id="cont">Continuer ›</button><br><button class="link del" id="delg">Supprimer</button></div></div>
+  <label style="margin-top:10px">Ce que tu sais d'elle</label><textarea id="gabout" style="min-height:60px">${esc(g.about||'')}</textarea></div>`;
+  g.items.forEach(it=>{
+    h+=`<div class="card" data-i="${it.id}"><div class="when">${fmt(it.t)}${it.goal?' · '+esc(it.goal):''}${it.imgs?' · 📷×'+it.imgs:''}</div>
+    <div class="bub her">${esc(it.ctx)}</div>
+    ${it.sent?`<div class="bub me">${esc(it.sent.text)}</div>`:''}
+    <button class="link tog">Voir les 4 propositions</button> <button class="link del rm" style="float:right">Supprimer</button><div class="props hidden mt"></div></div>`;
+  });
+  $('viewConv').innerHTML=h;
+  $('back').onclick=()=>{curGirl=null;showList()};
+  $('gabout').onchange=e=>{g.about=e.target.value;persist()};
+  $('cont').onclick=()=>{$('name').value=g.name;$('about').value=g.about||'';tab('gen');window.scrollTo(0,0)};
+  $('delg').onclick=()=>{if(confirm('Supprimer '+g.name+' et tout son historique ?')){db.girls=db.girls.filter(x=>x!==g);persist();fillNames();curGirl=null;showList()}};
+  $('viewConv').querySelectorAll('[data-i]').forEach(card=>{
+    const it=g.items.find(x=>x.id===card.dataset.i),box=card.querySelector('.props');
+    card.querySelector('.tog').onclick=e=>{
+      if(box.classList.toggle('hidden')){e.target.textContent='Voir les 4 propositions'}
+      else{box.innerHTML=msgsHTML(it.d,it);wireCopy(box,it);e.target.textContent='Masquer'}
+    };
+    card.querySelector('.rm').onclick=()=>{if(confirm('Supprimer cet échange ?')){g.items=g.items.filter(x=>x!==it);persist();showThread()}};
+  });
+}
 </script>
 </body>
 </html>
